@@ -7,7 +7,7 @@
           ➕ 添加分类
         </button>
         <button @click="$emit('save')" :disabled="loading" class="save-btn">
-          {{ loading ? '保存中...' : '💾 保存到GitHub' }}
+          {{ loading ? '保存中...' : '💾 保存到本地' }}
         </button>
       </div>
     </div>

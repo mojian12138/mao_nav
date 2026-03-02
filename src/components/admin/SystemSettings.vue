@@ -2,28 +2,21 @@
   <div class="system-settings">
     <div class="settings-header">
       <h2>⚙️ 系统设置</h2>
-      <p>管理导航站的系统配置和GitHub集成</p>
+      <p>管理导航站的系统配置和本地保存</p>
     </div>
 
-    <!-- GitHub连接状态 -->
+    <!-- 本地服务器连接状态 -->
     <div class="settings-section">
-      <h3>🔗 GitHub 集成状态</h3>
+      <h3>🔗 本地服务器状态</h3>
       <div class="github-status" :class="{ connected: connectionStatus?.connected }">
         <div class="status-info">
           <div class="status-indicator">
             <span class="status-dot" :class="{ active: connectionStatus?.connected }"></span>
             <span class="status-text">
-              {{ connectionStatus?.connected ? 'GitHub 连接正常' : 'GitHub 连接失败' }}
+              {{ connectionStatus?.connected ? '服务器连接正常' : '服务器连接失败' }}
             </span>
           </div>
-          <div v-if="connectionStatus?.connected" class="repo-info">
-            <p><strong>仓库:</strong> {{ connectionStatus.repo }}</p>
-            <p><strong>权限:</strong>
-              <span v-if="connectionStatus.permissions?.push" class="permission-badge success">写入权限</span>
-              <span v-else class="permission-badge warning">只读权限</span>
-            </p>
-          </div>
-          <div v-else-if="connectionStatus?.error" class="error-info">
+          <div v-if="!connectionStatus?.connected && connectionStatus?.error" class="error-info">
             <p>错误信息: {{ connectionStatus.error }}</p>
           </div>
         </div>
@@ -51,7 +44,7 @@
               maxlength="50"
             >
             <button
-              @click="saveTitleToGitHub"
+              @click="saveTitleToLocal"
               :disabled="titleSaving || !websiteTitle.trim()"
               class="save-title-btn"
             >
@@ -75,7 +68,7 @@
               </option>
             </select>
             <button
-              @click="saveSearchEngineToGitHub"
+              @click="saveSearchEngineToLocal"
               :disabled="searchEngineSaving || searchEngine === currentSearchEngine"
               class="save-search-engine-btn"
             >
@@ -119,7 +112,7 @@
                 📁 选择PNG文件
               </button>
               <button
-                @click="saveLogoToGitHub"
+                @click="saveLogoToLocal"
                 :disabled="logoSaving || !selectedLogoFile"
                 class="save-logo-btn"
                 v-if="selectedLogoFile"
@@ -144,31 +137,6 @@
             <span v-else class="value-missing">❌ 未配置</span>
           </div>
         </div>
-        <div class="config-item">
-          <label>GitHub Token (VITE_GITHUB_TOKEN):</label>
-          <div class="config-value">
-            <span v-if="envConfig.githubToken" class="value-set">✅ 已配置</span>
-            <span v-else class="value-missing">❌ 未配置</span>
-          </div>
-        </div>
-        <div class="config-item">
-          <label>GitHub 仓库所有者 (VITE_GITHUB_OWNER):</label>
-          <div class="config-value">
-            <span class="value-display">{{ envConfig.githubOwner || '默认: maodeyu180' }}</span>
-          </div>
-        </div>
-        <div class="config-item">
-          <label>GitHub 仓库名称 (VITE_GITHUB_REPO):</label>
-          <div class="config-value">
-            <span class="value-display">{{ envConfig.githubRepo || '默认: mao_nav' }}</span>
-          </div>
-        </div>
-        <div class="config-item">
-          <label>GitHub 分支 (VITE_GITHUB_BRANCH):</label>
-          <div class="config-value">
-            <span class="value-display">{{ envConfig.githubBranch || '默认: master' }}</span>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -177,52 +145,23 @@
       <h3>📖 配置说明</h3>
       <div class="config-guide">
         <div class="guide-step">
-          <h4>1. 获取 GitHub Personal Access Token</h4>
+          <h4>1. 启动本地保存服务</h4>
           <ol>
-            <li>访问 <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer">GitHub Settings → Developer settings → Personal access tokens</a></li>
-            <li>点击 "Generate new token" → "Generate new token (fine-grained token)"</li>
-            <li>设置 Token 名称，选择过期时间,仓库只选择mao_nav 防止token 泄露影响自己其他工程</li>
-            <li>
-              <strong>在 <span style="color:#3498db">Repository permissions (仓库权限)</span> 部分，勾选以下权限：</strong>
-              <ul>
-                <li>
-                  <code>Contents</code> - <strong>Read and write</strong> ✅<br>
-                  <span style="color:#888;font-size:13px;">用于读取和修改 <code>src/mock/mock_data.js</code> 文件，这是管理系统的核心功能</span>
-                </li>
-                <li>
-                  <code>Metadata</code> - <strong>Read</strong> ✅<br>
-                  <span style="color:#888;font-size:13px;">用于访问仓库基本信息，GitHub API 的基础权限</span>
-                </li>
-              </ul>
-              <div style="margin-top:8px;">
-                <strong>在 <span style="color:#f39c12">Account permissions (账户权限)</span> 部分：</strong><br>
-                <span style="color:#888;font-size:13px;">不需要勾选任何账户权限 ❌，我们只操作特定仓库，不需要账户级别的权限</span>
-              </div>
-            </li>
-            <li>点击 "Generate token" 并复制 Token</li>
+            <li>启动服务后，管理后台将通过 <code>/api</code> 接口读写数据</li>
+            <li>导航数据保存到服务器本地文件：<code>data/navigation.json</code></li>
+            <li>Logo 保存到：<code>data/public/logo.png</code></li>
+            <li>站点图标保存到：<code>data/public/sitelogo/</code></li>
           </ol>
         </div>
 
         <div class="guide-step">
           <h4>2. 配置环境变量</h4>
-          <p>
-            <strong>如果你在 <span style="color:#3498db">自己的服务器</span> 部署：</strong><br>
-            在项目根目录创建 <code>.env</code> 文件，添加以下配置：
-          </p>
-          <p>
-            <strong>如果你使用 <span style="color:#27ae60">Vercel</span> 或 <span style="color:#f39c12">Cloudflare Pages</span> 部署：</strong><br>
-            请在对应平台的「环境变量」设置界面，添加下方这些变量，无需在项目中创建 <code>.env</code> 文件。
-          </p>
           <div class="code-block">
             <pre><code># 管理员密钥（自定义）
 VITE_ADMIN_PASSWORD=your_admin_password_here
 
-# GitHub Token
-VITE_GITHUB_TOKEN=your_github_token_here
-# Github 仓库所有者
-VITE_GITHUB_OWNER=your_github_owner_here
-VITE_GITHUB_REPO=your_github_repo_here
-VITE_GITHUB_BRANCH=your_github_branch_here</code></pre>
+# 服务器写入保护（建议与 VITE_ADMIN_PASSWORD 一致）
+ADMIN_PASSWORD=your_admin_password_here</code></pre>
           </div>
         </div>
 
@@ -230,8 +169,7 @@ VITE_GITHUB_BRANCH=your_github_branch_here</code></pre>
           <h4>3. 安全注意事项</h4>
           <ul>
             <li>🔒 <strong>不要</strong>将 <code>.env</code> 文件提交到 Git 仓库</li>
-            <li>🔑 GitHub Token 具有写入权限，请妥善保管</li>
-            <li>🚫 定期更新和轮换 Token</li>
+            <li>🔑 <code>ADMIN_PASSWORD</code> 具有写入权限，请妥善保管</li>
             <li>📝 在生产环境中，建议使用更安全的密钥管理方案</li>
           </ul>
         </div>
@@ -278,10 +216,11 @@ VITE_GITHUB_BRANCH=your_github_branch_here</code></pre>
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useGitHubAPI } from '../../apis/useGitHubAPI.js'
+import { useLocalAPI } from '../../apis/useLocalAPI.js'
 import CustomDialog from './CustomDialog.vue'
+import { useDialog } from '../../composables/useDialog.js'
 
-const { verifyGitHubConnection, loadCategoriesFromGitHub, saveCategoriesToGitHub, uploadBinaryFile } = useGitHubAPI()
+const { verifyServerConnection, loadNavigation, saveNavigation, uploadBinaryFile } = useLocalAPI()
 
 // 连接状态
 const connectionStatus = ref(null)
@@ -289,11 +228,7 @@ const testing = ref(false)
 
 // 环境变量配置
 const envConfig = ref({
-  adminPassword: '',
-  githubToken: '',
-  githubOwner: '',
-  githubRepo: '',
-  githubBranch: ''
+  adminPassword: ''
 })
 
 // 系统信息
@@ -325,35 +260,20 @@ const searchEngineOptions = [
 const logoFileInput = ref(null)
 const selectedLogoFile = ref(null)
 const logoPreview = ref('')
-const currentLogo = ref('/logo.png')
+const getLogoUrl = () => {
+  const version = localStorage.getItem('logo_version')
+  return version ? `/logo.png?v=${version}` : '/logo.png'
+}
+const currentLogo = ref(getLogoUrl())
 const logoSaving = ref(false)
 
-// 自定义弹框状态
-const dialogVisible = ref(false)
-const dialogType = ref('success')
-const dialogTitle = ref('')
-const dialogMessage = ref('')
-const dialogDetails = ref([])
+const { dialogVisible, dialogType, dialogTitle, dialogMessage, dialogDetails, showDialog, closeDialog } = useDialog()
 
-// 显示弹框
-const showDialog = (type, title, message, details = []) => {
-  dialogType.value = type
-  dialogTitle.value = title
-  dialogMessage.value = message
-  dialogDetails.value = details
-  dialogVisible.value = true
-}
-
-// 关闭弹框
-const closeDialog = () => {
-  dialogVisible.value = false
-}
-
-// 测试GitHub连接
+// 测试服务器连接
 const testConnection = async () => {
   testing.value = true
   try {
-    connectionStatus.value = await verifyGitHubConnection()
+    connectionStatus.value = await verifyServerConnection()
   } catch (error) {
     connectionStatus.value = {
       connected: false,
@@ -367,11 +287,7 @@ const testConnection = async () => {
 // 检查环境变量配置
 const checkEnvConfig = () => {
   envConfig.value = {
-    adminPassword: import.meta.env.VITE_ADMIN_PASSWORD ? '***' : '',
-    githubToken: import.meta.env.VITE_GITHUB_TOKEN ? '***' : '',
-    githubOwner: import.meta.env.VITE_GITHUB_OWNER || '',
-    githubRepo: import.meta.env.VITE_GITHUB_REPO || '',
-    githubBranch: import.meta.env.VITE_GITHUB_BRANCH || ''
+    adminPassword: import.meta.env.VITE_ADMIN_PASSWORD ? '***' : ''
   }
 }
 
@@ -387,7 +303,7 @@ const getSystemInfo = () => {
 // 加载当前网站设置
 const loadWebsiteSettings = async () => {
   try {
-    const data = await loadCategoriesFromGitHub()
+    const data = await loadNavigation()
     currentTitle.value = data.title || '猫猫导航'
     websiteTitle.value = currentTitle.value
 
@@ -403,8 +319,7 @@ const loadWebsiteSettings = async () => {
   }
 }
 
-// 保存标题到GitHub
-const saveTitleToGitHub = async () => {
+const saveTitleToLocal = async () => {
   if (!websiteTitle.value.trim()) {
     showDialog(
       'error',
@@ -417,24 +332,30 @@ const saveTitleToGitHub = async () => {
 
   titleSaving.value = true
   try {
-    // 加载当前数据
-    const data = await loadCategoriesFromGitHub()
+    const data = await loadNavigation()
 
     // 更新标题
     data.title = websiteTitle.value.trim()
 
-    // 保存到GitHub
-    await saveCategoriesToGitHub(data)
+    const adminPassword = sessionStorage.getItem('admin_password') || ''
+    if (!adminPassword) {
+      throw new Error('登录信息已失效，请重新登录后再保存')
+    }
+    await saveNavigation(data, adminPassword)
 
     currentTitle.value = websiteTitle.value.trim()
+    try {
+      const raw = localStorage.getItem('navigation_cache_v1')
+      const cached = raw ? JSON.parse(raw) : {}
+      localStorage.setItem('navigation_cache_v1', JSON.stringify({ ...cached, title: currentTitle.value }))
+    } catch {}
     showDialog(
       'success',
       '🎉 网站标题保存成功',
-      '您的网站标题已成功保存到GitHub仓库！',
+      '您的网站标题已成功保存到服务器本地文件！',
       [
-        '• 更改将在 2-3 分钟内自动部署到线上',
-        '• 部署完成后，您可以在前台页面看到最新标题',
-        '• 如有问题，请检查Vercel或CFpage是否触发自动部署'
+        '• 刷新前台页面即可看到最新标题',
+        '• 如果前台有缓存，请强制刷新（Ctrl+F5）'
       ]
     )
   } catch (error) {
@@ -450,28 +371,33 @@ const saveTitleToGitHub = async () => {
   }
 }
 
-// 保存搜索引擎设置到GitHub
-const saveSearchEngineToGitHub = async () => {
+const saveSearchEngineToLocal = async () => {
   searchEngineSaving.value = true
   try {
-    // 加载当前数据
-    const data = await loadCategoriesFromGitHub()
+    const data = await loadNavigation()
 
     // 更新搜索引擎
     data.search = searchEngine.value
 
-    // 保存到GitHub
-    await saveCategoriesToGitHub(data)
+    const adminPassword = sessionStorage.getItem('admin_password') || ''
+    if (!adminPassword) {
+      throw new Error('登录信息已失效，请重新登录后再保存')
+    }
+    await saveNavigation(data, adminPassword)
 
     currentSearchEngine.value = searchEngine.value
+    try {
+      const raw = localStorage.getItem('navigation_cache_v1')
+      const cached = raw ? JSON.parse(raw) : {}
+      localStorage.setItem('navigation_cache_v1', JSON.stringify({ ...cached, search: currentSearchEngine.value }))
+    } catch {}
     showDialog(
       'success',
       '🎉 默认搜索引擎保存成功',
-      '您的默认搜索引擎设置已成功保存到GitHub仓库！',
+      '您的默认搜索引擎设置已成功保存到服务器本地文件！',
       [
-        '• 更改将在 2-3 分钟内自动部署到线上',
-        '• 部署完成后，用户访问网站时将默认使用新的搜索引擎',
-        '• 如有问题，请检查Vercel或CFpage是否触发自动部署'
+        '• 刷新前台页面后生效',
+        '• 如果前台有缓存，请强制刷新（Ctrl+F5）'
       ]
     )
   } catch (error) {
@@ -529,8 +455,7 @@ const handleLogoSelect = (event) => {
   reader.readAsDataURL(file)
 }
 
-// 保存Logo到GitHub
-const saveLogoToGitHub = async () => {
+const saveLogoToLocal = async () => {
   if (!selectedLogoFile.value) {
     showDialog(
       'error',
@@ -546,14 +471,17 @@ const saveLogoToGitHub = async () => {
     // 读取文件为ArrayBuffer
     const arrayBuffer = await selectedLogoFile.value.arrayBuffer()
 
-    // 上传到GitHub
-    const githubPath = 'public/logo.png'
-    const message = `chore: 更新网站Logo - ${new Date().toLocaleString('zh-CN')}`
-
-    await uploadBinaryFile(githubPath, arrayBuffer, message)
+    const adminPassword = sessionStorage.getItem('admin_password') || ''
+    if (!adminPassword) {
+      throw new Error('登录信息已失效，请重新登录后再保存')
+    }
+    await uploadBinaryFile('logo.png', arrayBuffer, adminPassword)
 
     // 更新当前Logo显示
-    currentLogo.value = logoPreview.value
+    const version = `${Date.now()}`
+    localStorage.setItem('logo_version', version)
+    currentLogo.value = `/logo.png?v=${version}`
+    window.dispatchEvent(new Event('logo-version-updated'))
 
     // 清理选择的文件
     selectedLogoFile.value = null
@@ -563,11 +491,10 @@ const saveLogoToGitHub = async () => {
     showDialog(
       'success',
       '🎉 Logo上传成功',
-      '您的网站Logo已成功保存到GitHub仓库！',
+      '您的网站Logo已成功保存到服务器本地文件！',
       [
-        '• 更改将在 2-3 分钟内自动部署到线上',
-        '• 部署完成后，刷新页面即可看到新Logo',
-        '• 如有问题，请检查Vercel或CFpage是否触发自动部署'
+        '• 刷新页面即可看到新Logo',
+        '• 如果前台有缓存，请强制刷新（Ctrl+F5）'
       ]
     )
   } catch (error) {
@@ -628,7 +555,7 @@ onMounted(() => {
   font-weight: 600;
 }
 
-/* GitHub状态样式 */
+/* 状态样式 */
 .github-status {
   display: flex;
   justify-content: space-between;

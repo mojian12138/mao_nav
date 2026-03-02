@@ -13,7 +13,7 @@
           ➕ 添加站点
         </button>
         <button @click="handleSave" :disabled="loading" class="save-btn">
-          {{ loading ? '保存中...' : '💾 保存到GitHub' }}
+          {{ loading ? '保存中...' : '💾 保存到本地' }}
         </button>
       </div>
     </div>
@@ -42,7 +42,6 @@
       <draggable
         v-model="currentPageSites"
         v-bind="dragOptions"
-        @end="onDragEnd"
         item-key="id"
         tag="div"
         class="draggable-list"
@@ -164,6 +163,16 @@
               <button type="button" @click="autoDetectIcon" class="auto-icon-btn">
                 🔍 自动获取
               </button>
+              <input
+                ref="iconFileInput"
+                type="file"
+                accept="image/png,image/jpeg,image/svg+xml,image/x-icon,image/vnd.microsoft.icon"
+                @change="handleIconFileSelect"
+                style="display: none"
+              >
+              <button type="button" @click="selectIconFile" class="upload-icon-btn">
+                📤 上传图片
+              </button>
             </div>
             <div class="icon-preview" v-if="formData.icon">
               <img :src="getIconDisplayUrl(formData.icon)" alt="图标预览" @error="iconError = true">
@@ -184,7 +193,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { useGitHubAPI } from '../../apis/useGitHubAPI.js'
+import { useLocalAPI } from '../../apis/useLocalAPI.js'
 import draggable from 'vuedraggable'
 
 const props = defineProps({
@@ -204,8 +213,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update', 'save', 'upload-icons'])
 
-// GitHub API
-const { uploadBinaryFile } = useGitHubAPI()
+const { uploadBinaryFile } = useLocalAPI()
 
 // 本地分类数据
 const localCategories = ref([])
@@ -223,6 +231,7 @@ const selectedCategoryId = ref('')
 const showAddModal = ref(false)
 const editingSite = ref(null)
 const iconError = ref(false)
+const iconFileInput = ref(null)
 
 // 表单数据
 const formData = ref({
@@ -232,6 +241,65 @@ const formData = ref({
   icon: '',
   categoryId: ''
 })
+
+const selectIconFile = () => {
+  iconFileInput.value?.click()
+}
+
+const handleIconFileSelect = async (event) => {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  const maxSize = 2 * 1024 * 1024
+  if (file.size > maxSize) {
+    alert('图标文件过大，请选择小于 2MB 的图片')
+    event.target.value = ''
+    return
+  }
+
+  const typeToExt = {
+    'image/png': 'png',
+    'image/jpeg': 'jpg',
+    'image/svg+xml': 'svg',
+    'image/x-icon': 'ico',
+    'image/vnd.microsoft.icon': 'ico'
+  }
+
+  const ext = typeToExt[file.type] || (file.name.split('.').pop() || '').toLowerCase()
+  const allowed = new Set(['png', 'jpg', 'jpeg', 'svg', 'ico'])
+  if (!allowed.has(ext)) {
+    alert('仅支持 png/jpg/svg/ico 格式的图标')
+    event.target.value = ''
+    return
+  }
+
+  let baseName = 'site'
+  try {
+    const u = new URL(formData.value.url)
+    baseName = `${u.hostname}${u.port ? `_${u.port}` : ''}`
+  } catch {}
+
+  baseName = baseName.replace(/[^a-zA-Z0-9._-]/g, '_')
+  const fileName = `${baseName}_${Date.now()}.${ext === 'jpeg' ? 'jpg' : ext}`
+  const localPath = `/sitelogo/${fileName}`
+
+  const arrayBuffer = await file.arrayBuffer()
+  pendingIcons.value.set(fileName, {
+    arrayBuffer,
+    fileName,
+    localPath,
+    domain: fileName
+  })
+
+  const dataUrl = URL.createObjectURL(file)
+  const oldPreview = iconPreviews.value.get(localPath)
+  if (oldPreview) URL.revokeObjectURL(oldPreview)
+  iconPreviews.value.set(localPath, dataUrl)
+
+  formData.value.icon = localPath
+  iconError.value = false
+  event.target.value = ''
+}
 
 // 监听props变化
 watch(() => props.categories, (newCategories) => {
@@ -350,7 +418,6 @@ const deleteSite = (site) => {
 const updateSitesOrder = (newSites) => {
   if (!selectedCategoryId.value) {
     // 如果是显示所有分类，拖拽排序会比较复杂，暂时不支持
-    console.warn('暂不支持跨分类拖拽排序')
     return
   }
 
@@ -370,17 +437,8 @@ const updateSitesOrder = (newSites) => {
   syncToParent()
 }
 
-// 拖拽结束事件
-const onDragEnd = (event) => {
-  console.log('拖拽排序完成:', event)
-}
-
-
-
 // 通用图标测试函数
 const testImage = async (imageUrl) => {
-  console.log(`🔍 开始检测图标: ${imageUrl}`)
-
   // 判断是否为同域名或用户直接输入的本站URL
   const isSameDomain = imageUrl.startsWith(window.location.origin) ||
                       imageUrl.startsWith('/') ||
@@ -389,7 +447,6 @@ const testImage = async (imageUrl) => {
 
   // 对于同域名的URL，可以使用fetch进行详细检测
   if (isSameDomain) {
-    console.log(`📡 同域名资源，使用fetch检测: ${imageUrl}`)
     try {
       // 先检查文件大小，避免加载空的或无效的favicon
       const response = await fetch(imageUrl, { method: 'HEAD' })
@@ -420,34 +477,28 @@ const testImage = async (imageUrl) => {
       return new Promise((resolve, reject) => {
         const img = new Image()
         img.onload = () => {
-          console.log(`✅ 同域名图标检测成功`)
           resolve(imageUrl)
         }
         img.onerror = () => reject(new Error('图标格式无效或无法显示'))
         img.src = imageUrl
       })
     } catch (fetchError) {
-      console.log(`❌ 同域名fetch失败: ${fetchError.message}`)
       throw fetchError
     }
   }
 
   // 对于跨域URL（包括所有favicon服务），优先使用Image检测避免CORS问题
-  console.log(`📸 跨域资源，使用Image检测: ${imageUrl}`)
   return new Promise((resolve, reject) => {
     const img = new Image()
     img.onload = () => {
       // 检查图片尺寸，过小可能是错误页面或无效图标
       if (img.naturalWidth < 1 || img.naturalHeight < 1) {
-        console.log(`❌ 图片尺寸无效: ${img.naturalWidth}x${img.naturalHeight}`)
         reject(new Error(`图片尺寸无效 (${img.naturalWidth}x${img.naturalHeight})，可能是无效图标`))
         return
       }
-      console.log(`✅ 跨域图标检测成功，尺寸: ${img.naturalWidth}x${img.naturalHeight}`)
       resolve(imageUrl)
     }
     img.onerror = () => {
-      console.log(`❌ 图片加载失败: ${imageUrl}`)
       reject(new Error('无法加载图标或图标不存在'))
     }
     // 对于跨域图片，不设置crossOrigin以避免额外的CORS检查
@@ -457,8 +508,6 @@ const testImage = async (imageUrl) => {
 
 // 使用Canvas方法下载图标（备用方案）
 const downloadIconViaCanvas = async (iconUrl, domain) => {
-  console.log(`🎨 使用Canvas方法下载: ${iconUrl}`)
-
   return new Promise((resolve, reject) => {
     const img = new Image()
 
@@ -472,8 +521,6 @@ const downloadIconViaCanvas = async (iconUrl, domain) => {
           reject(new Error(`图片尺寸无效 (${img.naturalWidth}x${img.naturalHeight})`))
           return
         }
-
-        console.log(`✅ 图片加载成功，尺寸: ${img.naturalWidth}x${img.naturalHeight}`)
 
         // 创建canvas并绘制图片
         const canvas = document.createElement('canvas')
@@ -520,8 +567,6 @@ const downloadIconViaCanvas = async (iconUrl, domain) => {
             URL.revokeObjectURL(oldPreview)
           }
           iconPreviews.value.set(localPath, dataUrl)
-
-          console.log(`✅ Canvas下载成功: ${localPath}，文件大小: ${arrayBuffer.byteLength} bytes`)
           resolve(localPath)
         }, 'image/png', 1.0) // 使用PNG格式，质量100%
 
@@ -541,8 +586,6 @@ const downloadIconViaCanvas = async (iconUrl, domain) => {
 
 // 下载图标并缓存
 const downloadAndCacheIcon = async (iconUrl, domain) => {
-  console.log(`📥 开始下载图标: ${iconUrl}`)
-
   // 优先尝试fetch直接下载
   try {
     const response = await fetch(iconUrl, {
@@ -585,55 +628,38 @@ const downloadAndCacheIcon = async (iconUrl, domain) => {
       URL.revokeObjectURL(oldPreview)
     }
     iconPreviews.value.set(localPath, dataUrl)
-
-    console.log(`✅ Fetch下载成功: ${localPath}，文件大小: ${arrayBuffer.byteLength} bytes`)
     return localPath
   } catch (fetchError) {
-    console.warn(`⚠️ Fetch下载失败: ${fetchError.message}，尝试Canvas方法`)
-
-    // 如果fetch失败，使用Canvas方法
     try {
       return await downloadIconViaCanvas(iconUrl, domain)
     } catch (canvasError) {
-      console.error(`❌ Canvas下载也失败: ${canvasError.message}`)
       throw new Error(`所有下载方法都失败: Fetch(${fetchError.message}), Canvas(${canvasError.message})`)
     }
   }
 }
 
-// 上传所有待处理的图标到GitHub（串行上传避免冲突）
-const uploadPendingIconsToGitHub = async () => {
+const uploadPendingIconsToLocal = async () => {
   const icons = Array.from(pendingIcons.value.values())
   if (icons.length === 0) {
-    console.log('没有待上传的图标')
     return
   }
 
-  console.log(`开始串行上传 ${icons.length} 个图标到GitHub...`)
-
   const uploadResults = []
+  const adminPassword = sessionStorage.getItem('admin_password') || ''
+  if (!adminPassword) {
+    throw new Error('登录信息已失效，请重新登录后再保存')
+  }
 
   // 串行上传，避免并发冲突
   for (const icon of icons) {
     try {
-      const githubPath = `public/sitelogo/${icon.fileName}`
-      const message = `chore: 添加站点图标 ${icon.fileName}`
-
-      console.log(`📤 上传图标: ${icon.fileName}`)
-      await uploadBinaryFile(githubPath, icon.arrayBuffer, message)
-      console.log(`✅ 图标已上传到GitHub: ${githubPath}`)
+      const result = await uploadBinaryFile(`sitelogo/${icon.fileName}`, icon.arrayBuffer, adminPassword)
 
       // 上传成功后从待处理列表中移除
       pendingIcons.value.delete(icon.domain)
       uploadResults.push({ success: true, fileName: icon.fileName })
     } catch (error) {
-      console.error(`❌ 上传图标 ${icon.fileName} 失败:`, error)
       uploadResults.push({ success: false, fileName: icon.fileName, error: error.message })
-
-      // 如果是SHA冲突，抛出错误停止上传，否则继续上传其他图标
-      if (error.message.includes('but expected')) {
-        throw new Error(`GitHub文件冲突: ${error.message}`)
-      }
     }
   }
 
@@ -641,18 +667,14 @@ const uploadPendingIconsToGitHub = async () => {
   const successCount = uploadResults.filter(r => r.success).length
   const failCount = uploadResults.filter(r => !r.success).length
 
-  console.log(`📊 上传结果: 成功 ${successCount}/${icons.length}`)
-
   if (failCount > 0) {
     const failedFiles = uploadResults.filter(r => !r.success).map(r => r.fileName)
     throw new Error(`部分图标上传失败: ${failedFiles.join(', ')}`)
   }
-
-  console.log('✅ 所有图标上传完成')
 }
 
 // 获取favicon图标
-const tryFallbackServices = async (domain) => {
+const tryFallbackServices = async (domain, fileKey = domain) => {
   // 首先尝试icon服务
   // 支持多个favicon服务轮询尝试
   const iconServiceUrls = [
@@ -662,61 +684,29 @@ const tryFallbackServices = async (domain) => {
 
   for (const iconServiceUrl of iconServiceUrls) {
     try {
-      console.log(`🔍 尝试图标服务:`, iconServiceUrl)
-
-      // 先测试图标是否可用
-      // await testImage(iconServiceUrl)
-      // console.log(`✅ 图标测试通过: ${iconServiceUrl}`)
-
       // 下载并缓存到内存（包含降级策略）
       try {
-        const localPath = await downloadAndCacheIcon(iconServiceUrl, domain)
+        const localPath = await downloadAndCacheIcon(iconServiceUrl, fileKey)
         formData.value.icon = localPath
         iconError.value = false
-        console.log(`✅ 成功下载并缓存图标: ${iconServiceUrl}`)
         return
       } catch (error) {
-        console.log(`❌ 图标服务失败:`, iconServiceUrl, error.message)
       }
     } catch (error) {
-      console.log(`❌ 图标服务失败:`, iconServiceUrl, error.message)
       // 继续尝试下一个服务
     }
   }
 
   const fallbackUrl = `https://www.faviconextractor.com/favicon/${domain}`
 
-  // 回退到标准favicon.ico路径
-  // const fallbackUrl = `https://${domain}/favicon.ico`
-
   try {
-    console.log(`🔍 尝试标准路径:`, fallbackUrl)
-
     // 先测试图标是否可用
     await testImage(fallbackUrl)
     formData.value.icon = fallbackUrl
     iconError.value = false
-    console.log(`✅ 直接使用标准favicon.ico URL`)
     return
-    // // 下载并缓存到内存（包含降级策略）
-    // try {
-    //   const localPath = await downloadAndCacheIcon(fallbackUrl, domain)
-    //   formData.value.icon = localPath
-    //   iconError.value = false
-    //   console.log(`✅ 标准路径下载并缓存成功`)
-    //   return
-    // } catch (downloadError) {
-    //   console.warn(`⚠️ 标准路径所有下载方法都失败，但图标可用，直接使用URL: ${downloadError.message}`)
-    //   // 如果所有下载方法都失败但测试通过，直接使用URL
-    //   formData.value.icon = fallbackUrl
-    //   iconError.value = false
-    //   console.log(`✅ 直接使用标准favicon.ico URL`)
-    //   return
-    // }
   } catch (error) {
-    console.log(`❌ 标准路径也失败:`, error.message)
-    console.error('❌ 无法获取网站图标')
-    alert('❌ 无法获取网站图标，请手动输入图标URL。\n\n💡 建议使用网站的 favicon.ico 或其他图标链接。')
+    alert('❌ 无法获取网站图标。\n\n你可以：\n1) 点击“📤 上传图片”手动上传图标\n2) 或在输入框里粘贴图标URL（favicon.ico 等）')
   }
 }
 
@@ -729,10 +719,11 @@ const autoDetectIcon = async () => {
 
   try {
     const url = new URL(formData.value.url)
-    await tryFallbackServices(url.host)
+    const serviceDomain = url.hostname
+    const fileKey = `${url.hostname}${url.port ? `_${url.port}` : ''}`
+    await tryFallbackServices(serviceDomain, fileKey)
   } catch (error) {
     alert('URL格式不正确')
-    console.error('URL 解析错误:', error)
   }
 }
 
@@ -833,25 +824,15 @@ const handleSave = async () => {
   try {
     // 先上传待处理的图标文件（只有真正下载缓存的图标）
     if (pendingIcons.value.size > 0) {
-      console.log(`📤 开始上传 ${pendingIcons.value.size} 个缓存的图标...`)
-      await uploadPendingIconsToGitHub()
-      console.log(`✅ 所有图标上传完成`)
-    } else {
-      console.log(`ℹ️ 没有需要上传的图标（可能都使用了外部URL）`)
+      await uploadPendingIconsToLocal()
     }
 
     // 然后保存站点数据
     emit('save')
   } catch (error) {
-    console.error('保存失败:', error)
     alert(`保存失败: ${error.message}`)
   }
 }
-
-// 监听分类变化
-watch(selectedCategoryId, () => {
-  console.log('分类切换:', selectedCategoryId.value)
-})
 </script>
 
 <style scoped>
@@ -1298,6 +1279,22 @@ watch(selectedCategoryId, () => {
 
 .auto-icon-btn:hover {
   background: #2980b9;
+}
+
+.upload-icon-btn {
+  padding: 10px 15px;
+  background: #27ae60;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  white-space: nowrap;
+  transition: background-color 0.3s ease;
+}
+
+.upload-icon-btn:hover {
+  background: #219a52;
 }
 
 .icon-preview {

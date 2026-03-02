@@ -19,7 +19,6 @@
     "bookmarks",
     "vue3",
     "vite",
-    "cloudflare-pages",
     "personal-website",
     "导航网站",
     "书签管理"
@@ -28,13 +27,16 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "server": "node server/index.js",
     "lint": "eslint . --fix"
   },
   "dependencies": {
+    "dotenv": "^17.2.2",
     "pinia": "^3.0.3",
     "vue": "^3.5.17",
     "vue-router": "^4.5.1",
-    "vuedraggable": "^4.1.0"
+    "vuedraggable": "^4.1.0",
+    "express": "^4.21.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.29.0",

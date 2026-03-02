@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import NavHomeView from '../views/NavHomeView.vue'
-import TestView from '../views/TestView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -19,14 +18,6 @@ const router = createRouter({
         requiresAuth: true
       }
     },
-    {
-      path: '/test',
-      name: 'test',
-      component: TestView,
-      meta: {
-        title: '环境变量测试 - 猫猫导航'
-      }
-    },
   ],
 })
 
@@ -36,7 +27,13 @@ router.beforeEach((to, from, next) => {
   if (to.meta?.title) {
     document.title = to.meta.title
   } else {
-    document.title = '猫猫导航'
+    try {
+      const cached = localStorage.getItem('navigation_cache_v1')
+      const cachedTitle = cached ? JSON.parse(cached)?.title : ''
+      document.title = cachedTitle || '猫猫导航'
+    } catch {
+      document.title = '猫猫导航'
+    }
   }
 
   next()

@@ -18,6 +18,11 @@ export default defineConfig({
   server: {
     // 配置SPA fallback，所有路由都返回index.html
     historyApiFallback: true,
+    proxy: {
+      '/api': 'http://localhost:8787',
+      '/logo.png': 'http://localhost:8787',
+      '/sitelogo': 'http://localhost:8787'
+    }
   },
   build: {
     // 构建时也需要考虑路由配置
