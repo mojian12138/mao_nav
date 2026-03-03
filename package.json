@@ -31,12 +31,13 @@
     "lint": "eslint . --fix"
   },
   "dependencies": {
+    "aplayer": "^1.10.1",
     "dotenv": "^17.2.2",
+    "express": "^4.21.2",
     "pinia": "^3.0.3",
     "vue": "^3.5.17",
     "vue-router": "^4.5.1",
-    "vuedraggable": "^4.1.0",
-    "express": "^4.21.2"
+    "vuedraggable": "^4.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.29.0",

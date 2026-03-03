@@ -15,6 +15,7 @@ dotenv.config()
 const dataDir = path.join(rootDir, 'data')
 const dataPublicDir = path.join(dataDir, 'public')
 const navigationFilePath = path.join(dataDir, 'navigation.json')
+const playlistFilePath = path.join(dataDir, 'playlist.json')
 const distDir = path.join(rootDir, 'dist')
 const seedNavigationFilePath = path.join(__dirname, 'seed_navigation.json')
 
@@ -77,6 +78,33 @@ const writeNavigation = async (data) => {
   await fsp.writeFile(navigationFilePath, JSON.stringify(data, null, 2), 'utf8')
 }
 
+const seedPlaylist = async () => {
+  const seeded = {
+    audio: [],
+    settings: {
+      lrcFontSize: '14px',
+      lrcColor: '#ffffff'
+    }
+  }
+  await writePlaylist(seeded)
+  return seeded
+}
+
+const readPlaylist = async () => {
+  try {
+    const raw = await fsp.readFile(playlistFilePath, 'utf8')
+    return JSON.parse(raw)
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error
+    return await seedPlaylist()
+  }
+}
+
+const writePlaylist = async (data) => {
+  await ensureDir(dataDir)
+  await fsp.writeFile(playlistFilePath, JSON.stringify(data, null, 2), 'utf8')
+}
+
 const getAdminPassword = () => {
   return process.env.ADMIN_PASSWORD || serverConfig?.adminPassword || process.env.VITE_ADMIN_PASSWORD || ''
 }
@@ -104,11 +132,14 @@ const isSafeRelativePath = (p) => {
   const normalized = p.replaceAll('\\', '/')
   if (normalized === 'logo.png') return true
   if (normalized.startsWith('sitelogo/')) return true
+  if (normalized.startsWith('music/')) return true
+  if (normalized.startsWith('music-cover/')) return true
+  if (normalized.startsWith('music-lrc/')) return true
   return false
 }
 
 const app = express()
-app.use(express.json({ limit: '15mb' }))
+app.use(express.json({ limit: '120mb' }))
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true })
@@ -175,6 +206,61 @@ app.post('/api/navigation', requireAdmin, async (req, res) => {
   }
 })
 
+app.get('/api/playlist', async (req, res) => {
+  try {
+    const data = await readPlaylist()
+    if (!data) {
+      res.status(404).json({ error: 'playlist.json 不存在' })
+      return
+    }
+    res.json(data)
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+app.post('/api/playlist', requireAdmin, async (req, res) => {
+  try {
+    const data = req.body?.data
+    if (!data || typeof data !== 'object') {
+      res.status(400).json({ error: 'data 无效' })
+      return
+    }
+
+    const audio = Array.isArray(data.audio) ? data.audio : null
+    if (!audio) {
+      res.status(400).json({ error: 'data.audio 必须是数组' })
+      return
+    }
+
+    const settings = data.settings && typeof data.settings === 'object' ? data.settings : {}
+    const lrcFontSize = typeof settings.lrcFontSize === 'string' ? settings.lrcFontSize : ''
+    const lrcColor = typeof settings.lrcColor === 'string' ? settings.lrcColor : ''
+    const allowedFontSizes = new Set(['12px', '14px', '16px', '18px', '20px'])
+    const normalizedSettings = {
+      lrcFontSize: allowedFontSizes.has(lrcFontSize) ? lrcFontSize : '14px',
+      lrcColor: /^#[0-9a-fA-F]{6}$/.test(lrcColor) ? lrcColor : '#ffffff'
+    }
+
+    const normalized = audio.map((item) => {
+      const safe = item && typeof item === 'object' ? item : {}
+      return {
+        id: typeof safe.id === 'string' ? safe.id : '',
+        name: typeof safe.name === 'string' ? safe.name : '',
+        artist: typeof safe.artist === 'string' ? safe.artist : '',
+        url: typeof safe.url === 'string' ? safe.url : '',
+        cover: typeof safe.cover === 'string' ? safe.cover : '',
+        lrc: typeof safe.lrc === 'string' ? safe.lrc : ''
+      }
+    }).filter((item) => item.name && item.url)
+
+    await writePlaylist({ audio: normalized, settings: normalizedSettings })
+    res.json({ ok: true })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
 app.post('/api/file', requireAdmin, async (req, res) => {
   try {
     const relPath = req.body?.path
@@ -202,7 +288,47 @@ app.post('/api/file', requireAdmin, async (req, res) => {
   }
 })
 
+app.post('/api/music/search', requireAdmin, async (req, res) => {
+  try {
+    const { input, page = 1, type = 'netease' } = req.body || {}
+    if (!input) {
+      res.status(400).json({ error: '请输入搜索关键词' })
+      return
+    }
+
+    const params = new URLSearchParams()
+    params.append('input', input)
+    params.append('filter', 'name')
+    params.append('type', type)
+    params.append('page', page)
+
+    const response = await fetch('https://music.txqq.pro/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Origin': 'https://music.txqq.pro',
+        'Referer': 'https://music.txqq.pro/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      },
+      body: params
+    })
+
+    if (!response.ok) {
+      throw new Error(`搜索失败: ${response.status}`)
+    }
+
+    const data = await response.json()
+    res.json(data)
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
 await ensureDir(path.join(dataPublicDir, 'sitelogo'))
+await ensureDir(path.join(dataPublicDir, 'music'))
+await ensureDir(path.join(dataPublicDir, 'music-cover'))
+await ensureDir(path.join(dataPublicDir, 'music-lrc'))
 
 app.use(express.static(dataPublicDir, { index: false, fallthrough: true }))
 

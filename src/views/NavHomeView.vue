@@ -182,6 +182,8 @@
           </footer>
         </div>
       </div>
+
+      <MusicPlayer />
     </main>
   </div>
 </template>
@@ -190,6 +192,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useNavigation } from '@/apis/useNavigation.js'
 import { useThemeStore } from '@/stores/counter.js'
+import MusicPlayer from '@/components/MusicPlayer.vue'
 // 导入搜索引擎logo图片
 import googleLogo from '@/assets/goolge.png'
 import baiduLogo from '@/assets/baidu.png'

@@ -58,6 +58,21 @@ export function useLocalAPI() {
     })
   }
 
+  const loadPlaylist = async () => {
+    return await requestJson('/playlist')
+  }
+
+  const savePlaylist = async (data, adminPassword) => {
+    return await requestJson('/playlist', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-password': adminPassword
+      },
+      body: JSON.stringify({ data })
+    })
+  }
+
   const uploadBinaryFile = async (relativePath, arrayBuffer, adminPassword) => {
     const base64 = arrayBufferToBase64(arrayBuffer)
     return await requestJson('/file', {
@@ -70,12 +85,26 @@ export function useLocalAPI() {
     })
   }
 
+  const searchMusic = async (input, page = 1, type = 'netease', adminPassword) => {
+    return await requestJson('/music/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-password': adminPassword
+      },
+      body: JSON.stringify({ input, page, type })
+    })
+  }
+
   return {
     verifyServerConnection,
     verifyAdminPassword,
     loadNavigation,
     saveNavigation,
-    uploadBinaryFile
+    loadPlaylist,
+    savePlaylist,
+    uploadBinaryFile,
+    searchMusic
   }
 }
 

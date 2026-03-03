@@ -1,4 +1,5 @@
 import './assets/main.css'
+import 'aplayer/dist/APlayer.min.css'
 
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'

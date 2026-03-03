@@ -63,6 +63,13 @@
           >
             ⚙️ 系统设置
           </button>
+          <button
+            class="tab-btn"
+            :class="{ active: activeTab === 'playlist' }"
+            @click="activeTab = 'playlist'"
+          >
+            🎵 歌单管理
+          </button>
         </div>
 
         <!-- 分类管理 -->
@@ -91,6 +98,10 @@
         <div v-if="activeTab === 'settings'" class="tab-content">
           <SystemSettings />
         </div>
+
+        <div v-if="activeTab === 'playlist'" class="tab-content">
+          <PlaylistManager />
+        </div>
       </main>
     </div>
 
@@ -113,6 +124,7 @@ import { useRouter } from 'vue-router'
 import CategoryManager from '../components/admin/CategoryManager.vue'
 import SiteManager from '../components/admin/SiteManager.vue'
 import SystemSettings from '../components/admin/SystemSettings.vue'
+import PlaylistManager from '../components/admin/PlaylistManager.vue'
 import CustomDialog from '../components/admin/CustomDialog.vue'
 import { useLocalAPI } from '../apis/useLocalAPI.js'
 import { useDialog } from '../composables/useDialog.js'

@@ -21,7 +21,10 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:8787',
       '/logo.png': 'http://localhost:8787',
-      '/sitelogo': 'http://localhost:8787'
+      '/sitelogo': 'http://localhost:8787',
+      '/music': 'http://localhost:8787',
+      '/music-cover': 'http://localhost:8787',
+      '/music-lrc': 'http://localhost:8787'
     }
   },
   build: {
