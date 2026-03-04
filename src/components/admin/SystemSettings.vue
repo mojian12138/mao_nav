@@ -140,6 +140,35 @@
       </div>
     </div>
 
+    <!-- 数据备份与恢复 -->
+    <div class="settings-section">
+      <h3>💾 数据备份与恢复</h3>
+      <div class="backup-restore-area">
+        <div class="backup-card">
+          <h4>📤 全量导出</h4>
+          <p>将当前所有数据（含站点、图片、配置）打包为 ZIP 文件进行备份。</p>
+          <button @click="exportData" :disabled="exporting" class="export-btn">
+            {{ exporting ? '打包导出中...' : '下载全量备份' }}
+          </button>
+        </div>
+        
+        <div class="restore-card">
+          <h4>📥 全量恢复</h4>
+          <p>从 ZIP 备份文件中恢复所有数据（将覆盖当前所有数据）。</p>
+          <input
+            ref="restoreFileInput"
+            type="file"
+            accept=".zip"
+            @change="handleRestoreFile"
+            style="display: none"
+          >
+          <button @click="triggerRestore" :disabled="restoring" class="restore-btn">
+            {{ restoring ? '恢复中...' : '选择备份文件恢复' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- 配置说明 -->
     <div class="settings-section">
       <h3>📖 配置说明</h3>
@@ -220,7 +249,7 @@ import { useLocalAPI } from '../../apis/useLocalAPI.js'
 import CustomDialog from './CustomDialog.vue'
 import { useDialog } from '../../composables/useDialog.js'
 
-const { verifyServerConnection, loadNavigation, saveNavigation, uploadBinaryFile } = useLocalAPI()
+const { verifyServerConnection, loadNavigation, saveNavigation, uploadBinaryFile, exportBackup, importBackup } = useLocalAPI()
 
 // 连接状态
 const connectionStatus = ref(null)
@@ -510,6 +539,68 @@ const saveLogoToLocal = async () => {
   }
 }
 
+// 备份与恢复
+const exporting = ref(false)
+const restoring = ref(false)
+const restoreFileInput = ref(null)
+
+const exportData = async () => {
+  exporting.value = true
+  try {
+    const adminPassword = sessionStorage.getItem('admin_password') || ''
+    if (!adminPassword) {
+      throw new Error('登录信息已失效，请重新登录后再操作')
+    }
+
+    const blob = await exportBackup(adminPassword)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    a.download = `mao_nav_full_backup_${date}.zip`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    showDialog('success', '✅ 导出成功', '全量备份数据（含图片）已成功导出！')
+  } catch (error) {
+    showDialog('error', '❌ 导出失败', error.message)
+  } finally {
+    exporting.value = false
+  }
+}
+
+const triggerRestore = () => {
+  restoreFileInput.value?.click()
+}
+
+const handleRestoreFile = async (event) => {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  restoring.value = true
+  try {
+    if (!file.name.endsWith('.zip')) {
+        throw new Error('请选择 ZIP 格式的备份文件')
+    }
+
+    const adminPassword = sessionStorage.getItem('admin_password') || ''
+    if (!adminPassword) {
+      throw new Error('登录信息已失效，请重新登录后再操作')
+    }
+
+    await importBackup(file, adminPassword)
+    showDialog('success', '✅ 恢复成功', '数据已成功恢复！请刷新页面查看效果。')
+    // 重新加载设置
+    await loadWebsiteSettings()
+  } catch (error) {
+    showDialog('error', '❌ 恢复失败', error.message)
+  } finally {
+    restoring.value = false
+    event.target.value = ''
+  }
+}
+
 // 组件挂载时执行
 onMounted(() => {
   checkEnvConfig()
@@ -640,6 +731,75 @@ onMounted(() => {
 }
 
 .test-btn:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+}
+
+/* 备份与恢复样式 */
+.backup-restore-area {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.backup-card, .restore-card {
+  padding: 20px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.backup-card:hover, .restore-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.backup-card h4, .restore-card h4 {
+  margin: 0 0 10px 0;
+  color: #2c3e50;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.backup-card p, .restore-card p {
+  color: #7f8c8d;
+  font-size: 14px;
+  margin: 0 0 20px 0;
+  line-height: 1.5;
+}
+
+.export-btn, .restore-btn {
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.export-btn {
+  background: #3498db;
+  color: white;
+}
+
+.export-btn:hover:not(:disabled) {
+  background: #2980b9;
+}
+
+.restore-btn {
+  background: #e67e22;
+  color: white;
+}
+
+.restore-btn:hover:not(:disabled) {
+  background: #d35400;
+}
+
+.export-btn:disabled, .restore-btn:disabled {
   background: #bdc3c7;
   cursor: not-allowed;
 }

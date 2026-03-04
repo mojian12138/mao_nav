@@ -1,17 +1,20 @@
-# 🐱 猫猫导航 (Mao Nav) v1.3.0
+# 🐱 猫猫导航 (Mao Nav) v1.3.1
 一个简洁的个人导航站：前台展示分类与站点，后台可在线编辑并把数据与图片保存到服务器本地（不依赖 GitHub/Vercel/Cloudflare）。
 
 ## ✨ 特性
 - 🎨 现代化 UI + 响应式布局（Vue 3 + Vite）
 - 📁 分类/站点管理（管理后台）
 - 💾 本地落盘保存（不依赖 GitHub/Vercel/Cloudflare）
-- 🖼️ 支持上传 Logo、自动抓取并保存站点图标（保存到服务器本地）
-- 🎵 内置音乐播放器（支持网易云/QQ音乐搜索与播放）
+- 🖼️ **图标自动获取**：服务端自动抓取并保存站点图标，解决跨域问题
+- 📦 **全量备份/恢复**：支持一键导出所有数据（包含图片、音乐、配置）为 ZIP 包，并支持一键恢复
+- 🎵 内置音乐播放器（支持网易云/QQ音乐搜索与播放，支持本地上传）
 - 🛠️ **新增网页安装向导**：无需手动改配置文件，访问网页即可配置管理员密码与端口
+- 📝 **细节优化**：站点描述支持多行显示，歌曲编辑显示原文件名
 
 ## 🧱 技术栈
 - 前端：Vue 3、Vue Router、Pinia、Vite
 - 后端：Node.js + Express（提供 `/api` 读写与静态资源托管）
+- 依赖：`archiver`, `adm-zip` (用于备份恢复)
 - 配置：自动生成 `server.config.json` 或使用 `.env`
 
 ## 🚀 快速开始（本地开发）
@@ -41,6 +44,7 @@ npm run dev
 
 ### 2. 部署步骤
 1. **上传代码**：将项目代码（或打包好的 `release.zip`）上传到服务器目录（如 `/www/server/nodejs/mao_nav`）。
+   > 注意：需上传 `server/` 目录, `dist/` 目录以及 `package.json`
 2. **安装依赖**：
    ```bash
    cd /www/server/nodejs/mao_nav
@@ -128,11 +132,14 @@ server {
 }
 ```
 
-## � 数据与文件存储
+## 💾 数据与文件存储
 - 导航数据：`data/navigation.json`
 - 站点图标：`data/public/sitelogo/`
 - 站点 Logo：`data/public/logo.png`
 - 音乐列表：`data/playlist.json`
+- 音乐文件：`data/public/music/`
+- 歌词文件：`data/public/music-lrc/`
+- 音乐封面：`data/public/music-cover/`
 
 ## 📁 目录结构
 - `server/`：Express 服务端代码

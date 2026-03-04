@@ -96,6 +96,49 @@ export function useLocalAPI() {
     })
   }
 
+  const exportBackup = async (adminPassword) => {
+    const response = await fetch('/api/backup/export', {
+      headers: {
+        'x-admin-password': adminPassword
+      }
+    })
+    
+    if (!response.ok) {
+      const text = await response.text()
+      let message = `HTTP ${response.status}`
+      try {
+        const json = JSON.parse(text)
+        if (json.error) message = json.error
+      } catch {}
+      throw new Error(message)
+    }
+    
+    return await response.blob()
+  }
+
+  const importBackup = async (file, adminPassword) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    
+    const response = await fetch('/api/backup/import', {
+      method: 'POST',
+      headers: {
+        'x-admin-password': adminPassword
+      },
+      body: formData
+    })
+    
+    const text = await response.text()
+    const data = text ? JSON.parse(text) : null
+    
+    if (!response.ok) {
+      const message = data?.error || `HTTP ${response.status}`
+      throw new Error(message)
+    }
+    
+    return data
+  }
+
   return {
     verifyServerConnection,
     verifyAdminPassword,
@@ -104,7 +147,9 @@ export function useLocalAPI() {
     loadPlaylist,
     savePlaylist,
     uploadBinaryFile,
-    searchMusic
+    searchMusic,
+    exportBackup,
+    importBackup
   }
 }
 

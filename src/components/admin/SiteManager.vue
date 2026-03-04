@@ -674,13 +674,20 @@ const uploadPendingIconsToLocal = async () => {
 }
 
 // 获取favicon图标
-const tryFallbackServices = async (domain, fileKey = domain) => {
+const tryFallbackServices = async (domain, fileKey = domain, fullUrl = null) => {
   // 首先尝试icon服务
   // 支持多个favicon服务轮询尝试
-  const iconServiceUrls = [
-    `https://www.faviconextractor.com/favicon/${domain}`,
-    `https://icon.maodeyu.fun/favicon/${domain}`
-  ]
+  const iconServiceUrls = []
+
+  // 优先使用本地API
+  if (fullUrl) {
+    iconServiceUrls.push(`/api/get-favicon?url=${encodeURIComponent(fullUrl)}`)
+  } else {
+    iconServiceUrls.push(`/api/get-favicon?url=${encodeURIComponent(domain)}`)
+  }
+
+  iconServiceUrls.push(`https://www.faviconextractor.com/favicon/${domain}`)
+  iconServiceUrls.push(`https://icon.maodeyu.fun/favicon/${domain}`)
 
   for (const iconServiceUrl of iconServiceUrls) {
     try {
@@ -721,7 +728,7 @@ const autoDetectIcon = async () => {
     const url = new URL(formData.value.url)
     const serviceDomain = url.hostname
     const fileKey = `${url.hostname}${url.port ? `_${url.port}` : ''}`
-    await tryFallbackServices(serviceDomain, fileKey)
+    await tryFallbackServices(serviceDomain, fileKey, formData.value.url)
   } catch (error) {
     alert('URL格式不正确')
   }

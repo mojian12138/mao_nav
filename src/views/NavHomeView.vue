@@ -155,7 +155,13 @@
                 class="site-card"
               >
                 <div class="site-icon">
-                  <img :src="site.icon" :alt="site.name" @error="handleImageError" />
+                  <img 
+                    :src="getIconUrl(site.icon)" 
+                    :alt="site.name" 
+                    loading="lazy"
+                    referrerpolicy="no-referrer"
+                    @error="handleImageError" 
+                  />
                 </div>
                 <div class="site-info">
                   <h3 class="site-name">{{ site.name }}</h3>
@@ -351,6 +357,15 @@ const handleSearch = () => {
   const engine = searchEngines[selectedEngine.value]
   const url = engine.url + encodeURIComponent(searchQuery.value)
   window.open(url, '_blank')
+}
+
+const getIconUrl = (iconPath) => {
+  if (!iconPath) return '/favicon.ico'
+  // 确保本地路径有正确的 / 前缀
+  if (iconPath.startsWith('sitelogo/')) {
+    return '/' + iconPath
+  }
+  return iconPath
 }
 
 // 处理图片加载错误
@@ -1011,9 +1026,12 @@ onUnmounted(() => {
   color: #7f8c8d;
   margin: 0;
   line-height: 1.4;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: normal;
 }
 
 /* 页面底部 */

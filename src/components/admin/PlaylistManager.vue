@@ -169,7 +169,10 @@
             <label>选择音乐文件 *:</label>
             <input type="file" accept="audio/*" @change="onAudioFileChange" class="form-input">
             <div v-if="audioFileName" class="file-hint">
-              已选择：{{ audioFileName }}
+              已选择新文件：{{ audioFileName }}
+            </div>
+            <div v-else-if="formData.url && formData.url.startsWith('/music/')" class="file-hint">
+              当前文件：{{ getFilenameFromUrl(formData.url) }}
             </div>
           </div>
 
@@ -197,7 +200,10 @@
             <label>选择封面图片:</label>
             <input type="file" accept="image/*" @change="onCoverFileChange" class="form-input">
             <div v-if="coverFileName" class="file-hint">
-              已选择：{{ coverFileName }}
+              已选择新文件：{{ coverFileName }}
+            </div>
+            <div v-else-if="formData.cover && formData.cover.startsWith('/music-cover/')" class="file-hint">
+              当前文件：{{ getFilenameFromUrl(formData.cover) }}
             </div>
           </div>
 
@@ -225,7 +231,10 @@
             <label>选择 LRC 文件:</label>
             <input type="file" accept=".lrc" @change="onLrcFileChange" class="form-input">
             <div v-if="lrcFileName" class="file-hint">
-              已选择：{{ lrcFileName }}
+              已选择新文件：{{ lrcFileName }}
+            </div>
+            <div v-else-if="formData.lrc && formData.lrc.startsWith('/music-lrc/')" class="file-hint">
+              当前文件：{{ getFilenameFromUrl(formData.lrc) }}
             </div>
           </div>
 
@@ -557,6 +566,11 @@ const setLrcMode = (mode) => {
     formData.value.lrc = ''
     lrcFile.value = null
   }
+}
+
+const getFilenameFromUrl = (url) => {
+  if (!url || typeof url !== 'string') return ''
+  return url.split('/').pop()
 }
 
 const safeFilename = (name) => {

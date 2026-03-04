@@ -4,6 +4,9 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import express from 'express'
 import dotenv from 'dotenv'
+import archiver from 'archiver'
+import AdmZip from 'adm-zip'
+import multer from 'multer'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -381,6 +384,150 @@ app.post('/api/music/search', requireAdmin, async (req, res) => {
 
     const data = await response.json()
     res.json(data)
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB Limit
+})
+
+app.get('/api/backup/export', requireAdmin, async (req, res) => {
+  try {
+    const archive = archiver('zip', { zlib: { level: 9 } })
+    
+    // Set response headers
+    res.attachment(`mao_nav_full_backup_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.zip`)
+    
+    archive.pipe(res)
+    
+    // Add all files in data directory to the root of the zip
+    archive.directory(dataDir, false)
+    
+    await archive.finalize()
+  } catch (error) {
+    console.error('Export error:', error)
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message })
+    }
+  }
+})
+
+app.post('/api/backup/import', requireAdmin, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: '未上传文件' })
+    }
+    
+    // Verify file type (simple check)
+    if (req.file.mimetype !== 'application/zip' && req.file.mimetype !== 'application/x-zip-compressed' && !req.file.originalname.endsWith('.zip')) {
+      return res.status(400).json({ error: '请上传 ZIP 格式的备份文件' })
+    }
+
+    const zip = new AdmZip(req.file.buffer)
+    // Extract to data directory, overwriting existing files
+    zip.extractAllTo(dataDir, true)
+    
+    res.json({ ok: true })
+  } catch (error) {
+    console.error('Import error:', error)
+    res.status(500).json({ error: error.message })
+  }
+})
+
+app.get('/api/get-favicon', async (req, res) => {
+  const targetUrl = req.query.url
+  if (!targetUrl) {
+    res.status(400).json({ error: 'url is required' })
+    return
+  }
+
+  try {
+    let pageUrl = targetUrl
+    if (!pageUrl.startsWith('http')) {
+      pageUrl = `https://${pageUrl}`
+    }
+
+    // 1. Fetch the page content to find link tags
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 10000) // 10s timeout
+
+    let iconUrl = null
+    let baseUrl = null
+
+    try {
+      const pageRes = await fetch(pageUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+      })
+      clearTimeout(timeoutId)
+
+      if (pageRes.ok) {
+        const html = await pageRes.text()
+        baseUrl = new URL(pageRes.url)
+
+        // Simple regex to find link tags with rel containing "icon"
+        const linkRegex = /<link\s+[^>]*?>/gi
+        const links = html.match(linkRegex) || []
+
+        for (const link of links) {
+          const relMatch = link.match(/rel=["']([^"']*?)["']/i)
+          const hrefMatch = link.match(/href=["']([^"']*?)["']/i)
+
+          if (relMatch && hrefMatch) {
+            const rel = relMatch[1].toLowerCase()
+            if (rel.includes('icon')) {
+              iconUrl = hrefMatch[1]
+              break // Found the first icon
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch page:', e.message)
+    }
+
+    // If no icon found in HTML, or page fetch failed, try default favicon.ico
+    if (!baseUrl) {
+      try {
+        baseUrl = new URL(pageUrl)
+      } catch {
+        throw new Error('Invalid URL')
+      }
+    }
+
+    if (!iconUrl) {
+      iconUrl = '/favicon.ico'
+    }
+
+    // Resolve relative URL
+    const finalIconUrl = new URL(iconUrl, baseUrl).toString()
+
+    // 2. Fetch the icon
+    const iconRes = await fetch(finalIconUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    })
+
+    if (!iconRes.ok) {
+      throw new Error(`Icon fetch failed: ${iconRes.status}`)
+    }
+
+    const contentType = iconRes.headers.get('content-type')
+    const arrayBuffer = await iconRes.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+
+    if (buffer.length < 100) {
+      throw new Error('Icon file too small')
+    }
+
+    res.set('Content-Type', contentType || 'image/x-icon')
+    res.send(buffer)
   } catch (error) {
     res.status(500).json({ error: error.message })
   }
