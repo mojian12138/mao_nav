@@ -106,7 +106,8 @@ const writePlaylist = async (data) => {
 }
 
 const getAdminPassword = () => {
-  return process.env.ADMIN_PASSWORD || serverConfig?.adminPassword || process.env.VITE_ADMIN_PASSWORD || ''
+  const runtimeConfig = readServerConfig()
+  return process.env.ADMIN_PASSWORD || runtimeConfig?.adminPassword || serverConfig?.adminPassword || process.env.VITE_ADMIN_PASSWORD || ''
 }
 
 const requireAdmin = (req, res, next) => {
@@ -140,6 +141,66 @@ const isSafeRelativePath = (p) => {
 
 const app = express()
 app.use(express.json({ limit: '120mb' }))
+
+app.get('/install', (req, res) => {
+  const runtimeConfig = readServerConfig()
+  const installed = !!(process.env.ADMIN_PASSWORD || runtimeConfig?.adminPassword || serverConfig?.adminPassword || process.env.VITE_ADMIN_PASSWORD)
+  if (installed) {
+    return res.redirect('/')
+  }
+  res.sendFile(path.join(__dirname, 'install.html'))
+})
+
+app.post('/api/install', async (req, res) => {
+  try {
+    const runtimeConfig = readServerConfig()
+    const installed = !!(process.env.ADMIN_PASSWORD || runtimeConfig?.adminPassword || serverConfig?.adminPassword || process.env.VITE_ADMIN_PASSWORD)
+    if (installed) {
+      return res.status(403).json({ error: '已安装，如需重置请删除 server.config.json' })
+    }
+
+    const { adminPassword, port, domain } = req.body
+    if (!adminPassword) return res.status(400).json({ error: '请设置管理员密码' })
+    
+    const newConfig = {
+      adminPassword,
+      port: Number(port) || 8787
+    }
+    
+    await fsp.writeFile(path.join(rootDir, 'server.config.json'), JSON.stringify(newConfig, null, 2))
+    
+    if (domain) {
+      const nginxConfig = `server {
+    listen 80;
+    server_name ${domain};
+
+    location / {
+        proxy_pass http://127.0.0.1:${newConfig.port};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}`
+      const deployDir = path.join(rootDir, 'deploy/nginx')
+      await ensureDir(deployDir)
+      await fsp.writeFile(path.join(deployDir, 'mao_nav.conf'), nginxConfig)
+    }
+
+    res.json({ ok: true })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+app.use((req, res, next) => {
+  const runtimeConfig = readServerConfig()
+  const installed = !!(process.env.ADMIN_PASSWORD || runtimeConfig?.adminPassword || serverConfig?.adminPassword || process.env.VITE_ADMIN_PASSWORD)
+  if (!installed && req.path !== '/install' && req.path !== '/api/install' && !req.path.startsWith('/api/health')) {
+    return res.redirect('/install')
+  }
+  next()
+})
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true })

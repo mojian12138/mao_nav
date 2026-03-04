@@ -1,4 +1,4 @@
-# 🐱 猫猫导航 (Mao Nav)
+# 🐱 猫猫导航 (Mao Nav) v1.3.0
 一个简洁的个人导航站：前台展示分类与站点，后台可在线编辑并把数据与图片保存到服务器本地（不依赖 GitHub/Vercel/Cloudflare）。
 
 ## ✨ 特性
@@ -6,112 +6,144 @@
 - 📁 分类/站点管理（管理后台）
 - 💾 本地落盘保存（不依赖 GitHub/Vercel/Cloudflare）
 - 🖼️ 支持上传 Logo、自动抓取并保存站点图标（保存到服务器本地）
+- 🎵 内置音乐播放器（支持网易云/QQ音乐搜索与播放）
+- 🛠️ **新增网页安装向导**：无需手动改配置文件，访问网页即可配置管理员密码与端口
 
 ## 🧱 技术栈
 - 前端：Vue 3、Vue Router、Pinia、Vite
 - 后端：Node.js + Express（提供 `/api` 读写与静态资源托管）
-- 配置：dotenv（读取 `.env`）、可选 `server.config.json`
+- 配置：自动生成 `server.config.json` 或使用 `.env`
 
-## 🚀 本地开发
+## 🚀 快速开始（本地开发）
 1. 安装依赖
 ```bash
 npm install
 ```
 
-2. 启动本地保存服务（API）
+2. 启动服务（API + 前端托管）
 ```bash
 npm run server
 ```
 
-3. 启动前端开发服务器
+3. 访问安装向导
+浏览器打开 `http://localhost:8787`，根据提示设置管理员密码。
+
+4. 开发模式（可选，仅修改前端时需要）
 ```bash
 npm run dev
 ```
 
-4. 访问
-- 前台：Vite 输出的地址（默认 5173/5174）
-- 管理后台：`/admin`
+## 📦 服务器部署（宝塔面板）
 
-## 🔑 管理密码
-后端写入接口需要管理员密码（用于保存导航数据、上传 Logo/站点图标）。推荐只配置后端密码即可。
+### 1. 准备工作
+- 服务器环境：Node.js 18+
+- 宝塔面板（推荐）或手动安装 PM2
 
-在项目根目录创建 `.env`（不要提交到仓库）：
-```bash
-ADMIN_PASSWORD=your_admin_password_here
-```
-管理后台登录会通过后端接口校验该密码。
+### 2. 部署步骤
+1. **上传代码**：将项目代码（或打包好的 `release.zip`）上传到服务器目录（如 `/www/server/nodejs/mao_nav`）。
+2. **安装依赖**：
+   ```bash
+   cd /www/server/nodejs/mao_nav
+   npm install --production
+   ```
+3. **启动服务**：
+   - 方式一：宝塔“网站-Node项目”中添加本项目，启动命令选 `npm run server` 或指向 `ecosystem.config.js`。
+   - 方式二：手动运行 `pm2 start ecosystem.config.js`。
 
-## ⚙️ 端口配置（配置文件）
-服务器支持从配置文件读取端口与管理员密码（也可继续用环境变量覆盖）：
-- 复制 `server.config.example.json` 为 `server.config.json`
-- 修改内容：
-```json
-{
-  "port": 8787,
-  "adminPassword": "your_admin_password_here"
+### 3. 初始化配置
+1. 确保服务器防火墙放行 **8787** 端口（仅首次安装需要）。
+2. 浏览器访问 `http://服务器IP:8787`。
+3. 填写管理员密码、端口（默认 8787）和域名。
+4. 点击“开始安装”，系统会自动生成配置文件。
+
+### 4. 配置 Nginx 反向代理（推荐）
+为了安全和绑定域名，建议使用 Nginx 反向代理。
+
+在宝塔面板的【网站】-【设置】-【配置文件】中，将以下内容替换进去（或修改相应部分）：
+
+```nginx
+server {
+    listen 80;
+    server_name www.mojian.uno; # 替换为你的域名
+
+    # 宝塔的站点根目录这里可以留着（不用于业务），但建议保留以便某些插件/验证使用
+    root /www/wwwroot/www.mojian.uno;
+    index index.html index.htm default.htm default.html;
+
+    # 宝塔扩展配置（如果你没用到可保留）
+    include /www/server/panel/vhost/nginx/extension/www.mojian.uno/*.conf;
+
+    #CERT-APPLY-CHECK--START
+    # 用于SSL证书申请时的文件验证相关配置 -- 请勿删除并保持这段设置在优先级高的位置
+    include /www/server/panel/vhost/nginx/well-known/www.mojian.uno.conf;
+    #CERT-APPLY-CHECK--END
+
+    # -------------------------
+    # 全站反向代理到 Node (PM2)
+    # -------------------------
+    location / {
+        proxy_pass http://127.0.0.1:8787;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket 支持（很重要：前端热更新/实时功能/某些框架会用到）
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        # 适当调大超时，避免接口耗时导致 504
+        proxy_read_timeout 300;
+        proxy_send_timeout 300;
+
+        # 可选：上传大文件时需要
+        client_max_body_size 100m;
+    }
+
+    # 禁止访问的敏感文件（保留）
+    location ~* (\.user.ini|\.htaccess|\.htpasswd|\.env.*|\.project|\.bashrc|\.bash_profile|\.bash_logout|\.DS_Store|\.gitignore|\.gitattributes|LICENSE|README\.md|CLAUDE\.md|CHANGELOG\.md|CHANGELOG|CONTRIBUTING\.md|TODO\.md|FAQ\.md|composer\.json|composer\.lock|package(-lock)?\.json|yarn\.lock|pnpm-lock\.yaml|\.\w+~|\.swp|\.swo|\.bak(up)?|\.old|\.tmp|\.temp|\.log|\.sql(\.gz)?|docker-compose\.yml|docker\.env|Dockerfile|\.csproj|\.sln|Cargo\.toml|Cargo\.lock|go\.mod|go\.sum|phpunit\.xml|pom\.xml|build\.gradl|pyproject\.toml|requirements\.txt|application(-\w+)?\.(ya?ml|properties))$
+    {
+        return 404;
+    }
+
+    # 禁止访问的敏感目录（保留）
+    location ~* /(\.git|\.svn|\.bzr|\.vscode|\.claude|\.idea|\.ssh|\.github|\.npm|\.yarn|\.pnpm|\.cache|\.husky|\.turbo|\.next|\.nuxt|node_modules|runtime)/ {
+        return 404;
+    }
+
+    # 一键申请SSL证书验证目录相关设置（保留）
+    location ~ \.well-known{
+        allow all;
+    }
+
+    # 禁止在证书验证目录放入敏感文件（保留）
+    if ( $uri ~ "^/\.well-known/.*\.(php|jsp|py|js|css|lua|ts|go|zip|tar\.gz|rar|7z|sql|bak)$" ) {
+        return 403;
+    }
+
+    access_log  /www/wwwlogs/www.mojian.uno.log;
+    error_log   /www/wwwlogs/www.mojian.uno.error.log;
 }
 ```
-优先级：环境变量 `PORT/ADMIN_PASSWORD` > `server.config.json`
 
-## 📦 服务器部署（自建服务器）
-1. 构建前端
-```bash
-npm run build
-```
-
-2. 启动服务（同时提供静态页面与 API）
-```bash
-npm run server
-```
-
-默认端口：`8787`（可通过 `PORT` 环境变量修改）。
-
-## 💾 数据与文件存储
+## � 数据与文件存储
 - 导航数据：`data/navigation.json`
 - 站点图标：`data/public/sitelogo/`
-- 站点 Logo：`data/public/logo.png`（同时作为浏览器标签页图标 favicon）
+- 站点 Logo：`data/public/logo.png`
+- 音乐列表：`data/playlist.json`
 
-## 📁 目录结构与依赖关系
-- server/
-  - `index.js`：Express 服务，提供 `/api/*`，并托管 `dist/` 与 `data/public/`
-  - `seed_navigation.json`：首次启动且 `data/navigation.json` 不存在时的初始化数据
-- src/
-  - apis/
-    - `useLocalAPI.js`：前端访问后端 `/api` 的封装（登录校验、读写导航、上传文件）
-    - `useNavigation.js`：前台页面使用的导航数据获取与本地缓存
-  - composables/
-    - `useDialog.js`：管理后台通用弹框状态与方法
-  - components/admin/：管理后台组件（分类/站点/系统设置）
-  - router/：前端路由（`/` 前台，`/admin` 管理后台）
-  - views/：页面视图（前台与后台入口）
-  - assets/：前端静态资源（搜索引擎图标等）
-- data/
-  - 运行时数据目录（默认不提交到仓库），存放导航 JSON 与上传文件
-- dist/
-  - 前端构建产物（`npm run build` 生成），由后端在生产环境托管
+## 📁 目录结构
+- `server/`：Express 服务端代码
+- `src/`：Vue 前端源码
+- `data/`：运行时数据（建议定期备份）
+- `dist/`：前端构建产物（由后端托管）
+- `deploy/`：部署相关配置备份
 
-直接依赖关系（简版）：
-- 前台 [views/NavHomeView.vue] → [apis/useNavigation.js] → [apis/useLocalAPI.js] → 后端 `/api/navigation`
-- 后台 [views/AdminView.vue] / [components/admin/*] → [apis/useLocalAPI.js] → 后端 `/api/navigation` 与 `/api/file`
-- 后端 `server/index.js` → 写入 `data/` 并对外提供静态资源 `/logo.png`、`/sitelogo/*`
-
-## 🧭 常见问题
-### npm run dev 报 ENOENT 找不到 package.json
-请确认当前目录是项目目录 `mao_nav`，而不是上层目录：
-```bash
-cd C:\Users\19784\Documents\CodeList\web\mao_nav
-npm run dev
-```
-宝塔/PM2 启动 Node 项目时也要把“运行目录/工作目录”设置到 `.../mao_nav`。
-
-## 🛠️ 常用命令
-```bash
-npm run dev
-npm run server
-npm run build
-npm run preview
-npm run lint
-```
+## 🔑 管理后台
+- 访问地址：`/admin`
+- 默认密码：安装时设置的密码（或在 `server.config.json` 中修改）
 
 ## 📄 许可证
 MIT - 查看 [LICENSE](LICENSE)
