@@ -126,16 +126,23 @@
       </div>
     </div>
 
-    <!-- 环境变量配置 -->
+    <!-- 系统配置状态 -->
     <div class="settings-section">
-      <h3>🌍 环境变量配置</h3>
+      <h3>🔐 系统配置状态</h3>
       <div class="env-config">
         <div class="config-item">
-          <label>管理员密钥 (VITE_ADMIN_PASSWORD):</label>
+          <label>管理员密钥配置:</label>
           <div class="config-value">
-            <span v-if="envConfig.adminPassword" class="value-set">✅ 已配置</span>
+            <span v-if="envConfig.adminPassword" class="value-set">✅ 已通过环境变量配置 (VITE_ADMIN_PASSWORD)</span>
+            <span v-else-if="serverConfigStatus.configured" class="value-set">
+              {{ serverConfigStatus.method === 'env' ? '✅ 已通过环境变量配置 (ADMIN_PASSWORD)' : '✅ 已通过 server.config.json 配置' }}
+            </span>
             <span v-else class="value-missing">❌ 未配置</span>
           </div>
+        </div>
+        <div class="config-tip" v-if="serverConfigStatus.method === 'file'">
+          <p>💡 您使用的是网页安装向导生成的配置。</p>
+          <p>如需修改密码，请直接修改服务器根目录下的 <code>server.config.json</code> 文件，然后重启服务。</p>
         </div>
       </div>
     </div>
@@ -249,7 +256,7 @@ import { useLocalAPI } from '../../apis/useLocalAPI.js'
 import CustomDialog from './CustomDialog.vue'
 import { useDialog } from '../../composables/useDialog.js'
 
-const { verifyServerConnection, loadNavigation, saveNavigation, uploadBinaryFile, exportBackup, importBackup } = useLocalAPI()
+const { verifyServerConnection, loadNavigation, saveNavigation, uploadBinaryFile, exportBackup, importBackup, getConfigStatus } = useLocalAPI()
 
 // 连接状态
 const connectionStatus = ref(null)
@@ -258,6 +265,12 @@ const testing = ref(false)
 // 环境变量配置
 const envConfig = ref({
   adminPassword: ''
+})
+
+// 服务器配置状态
+const serverConfigStatus = ref({
+  configured: false,
+  method: 'none'
 })
 
 // 系统信息
@@ -313,10 +326,19 @@ const testConnection = async () => {
   }
 }
 
-// 检查环境变量配置
-const checkEnvConfig = () => {
+// 检查配置状态
+const checkConfigStatus = async () => {
+  // 检查前端环境变量
   envConfig.value = {
     adminPassword: import.meta.env.VITE_ADMIN_PASSWORD ? '***' : ''
+  }
+  
+  // 检查服务器配置状态
+  try {
+    const status = await getConfigStatus()
+    serverConfigStatus.value = status
+  } catch (e) {
+    console.error('Failed to get config status', e)
   }
 }
 
@@ -603,7 +625,7 @@ const handleRestoreFile = async (event) => {
 
 // 组件挂载时执行
 onMounted(() => {
-  checkEnvConfig()
+  checkConfigStatus()
   getSystemInfo()
   testConnection()
   loadWebsiteSettings()
@@ -850,6 +872,19 @@ onMounted(() => {
   padding: 4px 8px;
   border-radius: 4px;
   font-size: 13px;
+}
+
+.config-tip {
+  margin-top: 10px;
+  padding: 10px;
+  background-color: #e8f4fd;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #34495e;
+}
+
+.config-tip p {
+  margin: 4px 0;
 }
 
 /* 配置说明样式 */

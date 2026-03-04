@@ -32,6 +32,10 @@ export function useLocalAPI() {
     }
   }
 
+  const getConfigStatus = async () => {
+    return await requestJson('/config/status')
+  }
+
   const verifyAdminPassword = async (adminPassword) => {
     return await requestJson('/auth/verify', {
       method: 'POST',
@@ -149,7 +153,8 @@ export function useLocalAPI() {
     uploadBinaryFile,
     searchMusic,
     exportBackup,
-    importBackup
+    importBackup,
+    getConfigStatus
   }
 }
 

@@ -209,6 +209,17 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true })
 })
 
+app.get('/api/config/status', (req, res) => {
+  const runtimeConfig = readServerConfig()
+  const envPassword = process.env.ADMIN_PASSWORD || process.env.VITE_ADMIN_PASSWORD
+  const filePassword = runtimeConfig?.adminPassword || serverConfig?.adminPassword
+  
+  res.json({
+    configured: !!(envPassword || filePassword),
+    method: envPassword ? 'env' : (filePassword ? 'file' : 'none')
+  })
+})
+
 app.post('/api/auth/verify', (req, res) => {
   const expected = getAdminPassword()
   if (!expected) {
